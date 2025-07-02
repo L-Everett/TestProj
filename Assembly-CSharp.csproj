@@ -59,6 +59,10 @@
     <Compile Include="Assets\Game\Scripts\Common\Utils\LabelAttribute.cs" />
     <Compile Include="Assets\Game\Scripts\Common\Player\PlayerCtrl.cs" />
     <Compile Include="Assets\Game\Scripts\Common\Camera\CameraFollow.cs" />
+    <Compile Include="Assets\Game\Scripts\Common\Utils\FPSInfo.cs" />
+    <Compile Include="Assets\Game\Scripts\Common\Utils\GameDefine.cs" />
+    <Compile Include="Assets\Game\Scripts\Common\Utils\Readme.cs" />
+    <Compile Include="Assets\Game\Scripts\Battle\Bullet\Bullet.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
