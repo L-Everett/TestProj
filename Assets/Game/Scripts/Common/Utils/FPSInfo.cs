@@ -2,6 +2,7 @@
 
 public class FPSInfo : MonoBehaviour
 {
+    [Label("帧率")] public int FPS;
     /// <summary>
     /// 上一次更新帧率的时间
     /// </summary>
@@ -24,15 +25,15 @@ public class FPSInfo : MonoBehaviour
 
     void Awake()
     {
-        Application.targetFrameRate = 120;
+        Application.targetFrameRate = FPS;
         DontDestroyOnLoad(this);
     }
 
     void Start()
     {
         m_lastUpdateShowTime = Time.realtimeSinceStartup;
-        m_fps = new Rect(0, 0, 50, 50);
-        m_dtime = new Rect(0, 50, 50, 50);
+        m_fps = new Rect(1600, 0, 50, 50);
+        m_dtime = new Rect(1600, 50, 50, 50);
         m_style.fontSize = 50;
         m_style.normal.textColor = Color.red;
     }

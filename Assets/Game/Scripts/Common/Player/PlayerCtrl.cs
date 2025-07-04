@@ -1,9 +1,23 @@
-﻿using System.Collections;
+﻿using DG.Tweening;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerCtrl : MonoBehaviour
 {
+    [Header("组件")]
+    public Rigidbody2D mRigidbody2D;
+    public Collider2D mCollider2D;
+    public Animator mAnimator;
+    public SpriteRenderer mSpriteRenderer;
+    public GameObject mWeapon;
+
+    [Header("UI")]
+    public Transform mHpRoot;
+    public GameObject mHp;
+
     [Header("数值信息")]
+    [Label("血量")] public int mHpCount;
     [Label("移动速度")] public float mMoveSpeed;
     [Label("可连跳次数")] public float mJumpMaxCount;
     [Label("跳跃力度")] public float mJumpForce;
@@ -13,18 +27,35 @@ public class PlayerCtrl : MonoBehaviour
     [Label("冲刺持续时间")] public float mRushKeepTime;
     [Label("近战攻击冷却时间")] public float mNearAttackMaxCoolTime;
     [Label("远程攻击冷却时间")] public float mFarAttackMaxCoolTime;
-
-    [Header("组件")]
-    public Rigidbody2D mRigidbody2D;
-    public Collider2D mCollider2D;
-    public Animator mAnimator;
+    [Label("弹反冷却时间")] public float mBlockCoolTime;
+    [Label("受击冷却时间")] public float mHurtCoolTime;
 
     #region 变量数据模块
+    //--------------------------------战斗--------------------------------
+    /// <summary>
+    /// 当前血量值
+    /// </summary>
+    private int mCurHpCount;
+    private List<HpCtrl> mHpCtrlList;
+    /// <summary>
+    /// 受伤冷却时间
+    /// </summary>
+    private float mHurtCoolTimer;
+    /// <summary>
+    /// 是否死亡
+    /// </summary>
+    private bool mIsDeath;
+    /// <summary>
+    /// 是否处于无敌
+    /// </summary>
+    private bool mIsInvincible;
+    //-------------------------------------------------------------------
+
     //--------------------------------移动--------------------------------
     /// <summary>
     /// 角色朝向 1 -> 右， -1 -> 左
     /// </summary>
-    private float mLookAt;
+    [HideInInspector] public int mLookAt;
     /// <summary>
     /// 是否可移动
     /// </summary>
@@ -80,6 +111,17 @@ public class PlayerCtrl : MonoBehaviour
     [Label("子弹"), SerializeField]private GameObject mBullet;
     //-------------------------------------------------------------------
 
+    //--------------------------------弹反--------------------------------
+    /// <summary>
+    /// 弹反冷却计时器
+    /// </summary>
+    private float mBlockCoolTimer;
+    /// <summary>
+    /// 正在弹反
+    /// </summary>
+    private bool mIsBlock;
+    //-------------------------------------------------------------------
+
     //--------------------------------其他--------------------------------
     /// <summary>
     /// 是否在地面
@@ -99,6 +141,11 @@ public class PlayerCtrl : MonoBehaviour
     #region 初始化数据
     void InitData()
     {
+        //战斗
+        mCurHpCount = mHpCount;
+        mHpCtrlList = new List<HpCtrl>();
+        mHurtCoolTimer = mHurtCoolTime;
+
         //移动
         mLookAt = 1;
         mCanMove = true;
@@ -117,6 +164,9 @@ public class PlayerCtrl : MonoBehaviour
         mNearAttackCoolTimer = mNearAttackMaxCoolTime;
         mFarAttackCoolTimer = mFarAttackMaxCoolTime;
 
+        //弹反
+        mBlockCoolTimer = mBlockCoolTime;
+
         //其它
         mInitGravityScale = mRigidbody2D.gravityScale;
         mIsOnGround = true;
@@ -127,29 +177,66 @@ public class PlayerCtrl : MonoBehaviour
     private void Start()
     {
         InitData();
+        InitUI();
     }
 
     private void FixedUpdate()
     {
-        Move();
-
-        SetMoveAnim();
-        SetStopMoveAnim();
+        if (!mIsDeath)
+        {
+            Move();
+        }
     }
 
     void Update()
     {
-        Attack();
-        if (!mIsAttack)
+        if (!mIsDeath)
         {
-            Jump();
-            Rush();
+            GetKeyInput();
+            SetMoveAnim();
+            SetStopMoveAnim();
         }
-
-        SetJumpAnim();
     }
 
     #region 控制相关
+    void GetKeyInput()
+    {
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            Jump();
+        }
+        else if (Input.GetMouseButtonDown(0))
+        {
+            Rush();
+        }
+        else if (Input.GetKeyDown(KeyCode.F))
+        {
+            Attack(0);
+        }
+        else if (Input.GetKeyDown(KeyCode.Q))
+        {
+            Attack(1);
+        }
+        else if (Input.GetMouseButtonDown(1))
+        {
+            Block();
+        }
+
+        UpdateTimer();
+    }
+
+    /// <summary>
+    /// 更新冷却
+    /// </summary>
+    void UpdateTimer()
+    {
+        UpdateRush();
+        UpdateJump();
+        UpdateAttack();
+        UpdateBlock();
+        UpdateHurt();
+    }
+
     //移动
     void Move()
     {
@@ -165,9 +252,8 @@ public class PlayerCtrl : MonoBehaviour
     //跳跃
     void Jump()
     {
-        mJumpCoolTimer += Time.deltaTime;
         if (mJumpCoolTimer < mJumpMaxCoolTime) return;
-        if (Input.GetKeyDown(KeyCode.Space))
+        if (!mIsRush)
         {
             if (mCurJumpCount >= mJumpMaxCount) return;
             switch (mCurJumpCount)
@@ -182,14 +268,18 @@ public class PlayerCtrl : MonoBehaviour
             }
             mCurJumpCount++;
             mJumpCoolTimer = 0f;
+            SetJumpAnim();
         }
+    }
+    void UpdateJump()
+    {
+        mJumpCoolTimer += Time.deltaTime;
     }
 
     // 鼠标左键冲刺
     void Rush()
     {
-        mRushCoolTimer += Time.deltaTime;
-        if (Input.GetMouseButtonDown(0) && mRushCoolTimer >= mRushMaxCoolTime)
+        if (mRushCoolTimer >= mRushMaxCoolTime && !mIsAttack && !mIsBlock)
         {
             if (mIsOnGround || !mHasRushOnSky)
             {
@@ -203,6 +293,11 @@ public class PlayerCtrl : MonoBehaviour
             }
         }
         
+        
+    }
+    void UpdateRush()
+    {
+        mRushCoolTimer += Time.deltaTime;
         if (mIsRush)
         {
             mRushKeepTimer += Time.deltaTime;
@@ -217,34 +312,71 @@ public class PlayerCtrl : MonoBehaviour
         }
     }
 
-    //攻击 F-近战 Q-远程
-    void Attack()
+    /// <summary>
+    /// 攻击 F-近战 Q-远程
+    /// </summary>
+    /// <param name="type">0 -> 近战, 1 -> 远程</param>
+    void Attack(int type)
     {
-        if (Input.GetKeyDown(KeyCode.F) && mNearAttackCoolTimer >= mNearAttackMaxCoolTime) 
+        if (type == 0 && mNearAttackCoolTimer >= mNearAttackMaxCoolTime && !mIsAttack && !mIsRush) 
         {
             SetNearAttackAnim();
+            mRigidbody2D.velocity = new Vector2(mLookAt * 1.5f, mRigidbody2D.velocity.y);
+            mNearAttackCoolTimer = -0.3f;
         }
-        if (Input.GetKeyDown(KeyCode.Q) && mFarAttackCoolTimer >= mFarAttackMaxCoolTime)
+        if (type == 1 && mFarAttackCoolTimer >= mFarAttackMaxCoolTime && !mIsAttack && !mIsRush)
         {
             SetFarAttackAnim();
             StartCoroutine(Shot());
+            mFarAttackCoolTimer = -0.6f;
         }
+        if (mIsAttack)
+        {
+            BanMoveAnim();
+        }
+    }
+    void UpdateAttack()
+    {
         mNearAttackCoolTimer += Time.deltaTime;
         mFarAttackCoolTimer += Time.deltaTime;
     }
     IEnumerator Shot()
     {
-        yield return new WaitForSeconds(0.2f);
+        yield return new WaitForSeconds(0.3f);
+        mRigidbody2D.velocity = new Vector2(mLookAt * -1.5f, mRigidbody2D.velocity.y);
         Transform bullet = GameObject.Instantiate(mBullet, transform.parent).transform;
-        bullet.position = transform.position + new Vector3(mLookAt / 2, 0, 0);
+        bullet.position = transform.position + new Vector3(mLookAt, -0.8f, 0);
         bullet.localScale = new Vector3(mLookAt * bullet.localScale.x, bullet.localScale.y, bullet.localScale.z);
-        bullet.GetComponent<Bullet>().Init(mLookAt, mMoveSpeed * 1.5f);
+        bullet.GetComponent<Bullet>().Init(mLookAt, mMoveSpeed * 1.5f, 0);
     }
     IEnumerator AttackOver()
     {
-        yield return new WaitForSeconds(0.3f);
+        yield return new WaitForSeconds(0.5f);
         mIsAttack = false;
         mCanMove = true;
+    }
+
+    void Block()
+    {
+        if (mBlockCoolTimer >= mBlockCoolTime && !mIsAttack && !mIsRush)
+        {
+            mIsBlock = true;
+            mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
+            BanMoveAnim();
+            SetBlockAnim();
+            mBlockCoolTimer = -0.2f;
+            StartCoroutine(BlockOver());
+        }
+    }
+    IEnumerator BlockOver()
+    {
+        yield return new WaitForSeconds(0.2f);
+        mCanMove = true;
+        mIsBlock = false;
+    }
+    void UpdateBlock()
+    {
+        mBlockCoolTimer += Time.deltaTime;
     }
 
     #endregion
@@ -254,19 +386,20 @@ public class PlayerCtrl : MonoBehaviour
     {
         if(collision.collider.CompareTag("Ground") && mCurJumpCount > 0)
         {
+            mRigidbody2D.velocity = new Vector2(mRigidbody2D.velocity.x, 0);
+            mIsOnGround = true;
+
             // 重置跳跃
             mCurJumpCount = 0;
             mJumpCoolTimer = mJumpMaxCoolTime;
-
-            mRigidbody2D.velocity = new Vector2(mRigidbody2D.velocity.x, 0);
-            mIsOnGround = true;
+            SetJumpAnim();
 
             //重置空中冲刺次数
             mHasRushOnSky = false;
         }
         else if (collision.collider.CompareTag("Wall"))
         {
-            mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
+            //mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
         }
     }
 
@@ -281,15 +414,21 @@ public class PlayerCtrl : MonoBehaviour
     #endregion
 
     #region 动画相关
+    void SetAnim(PlayerAnimState playerAnimState)
+    {
+        mCurAnimState = playerAnimState;
+        mAnimator.SetInteger("State", (int)mCurAnimState);
+    }
+
     void SetMoveAnim()
     {
         if(mRigidbody2D.velocity.x != 0 && mCanMove)
         {
-            mAnimator.SetFloat("MoveSpeed", Mathf.Abs(mRigidbody2D.velocity.x) * mMoveSpeed / 16);
+            if (mCurAnimState == PlayerAnimState.Jump1 || mCurAnimState == PlayerAnimState.Jump2) return;
+            mAnimator.SetFloat("MoveSpeed", Mathf.Abs(mRigidbody2D.velocity.x) * mMoveSpeed / 12);
             if(mCurAnimState != PlayerAnimState.Move && mIsOnGround)
             {
-                mCurAnimState = PlayerAnimState.Move;
-                mAnimator.SetInteger("State", (int)mCurAnimState);
+                SetAnim(PlayerAnimState.Move);
             }
         }
     }
@@ -305,24 +444,23 @@ public class PlayerCtrl : MonoBehaviour
 
     void SetJumpAnim()
     {
-        if (mCurJumpCount == 1 && mCurAnimState != PlayerAnimState.Jump1)
-        {
-            mCurAnimState = PlayerAnimState.Jump1;
-            mAnimator.SetInteger("State", (int)mCurAnimState);
-        }
-        else if (mCurJumpCount == 2 && mCurAnimState != PlayerAnimState.Jump2)
-        {
-            mCurAnimState = PlayerAnimState.Jump2;
-            mAnimator.SetInteger("State", (int)mCurAnimState);
-        }
         if (mIsOnGround)
         {
-            if (mCurAnimState == PlayerAnimState.Jump1 || mCurAnimState == PlayerAnimState.Jump2)
+            if (mCurJumpCount == 1 && mCurAnimState != PlayerAnimState.Jump1)
             {
-                mCurAnimState = PlayerAnimState.Idle;
-                mAnimator.SetInteger("State", (int)mCurAnimState);
+                SetAnim(PlayerAnimState.Jump1);
             }
-            
+            else
+            {
+                SetAnim(PlayerAnimState.Idle);
+            }
+        }
+        else
+        {
+            if (mCurJumpCount == 2 && mCurAnimState != PlayerAnimState.Jump2)
+            {
+                SetAnim(PlayerAnimState.Jump2);
+            }
         }
     }
 
@@ -334,7 +472,6 @@ public class PlayerCtrl : MonoBehaviour
     void SetNearAttackAnim()
     {
         mIsAttack = true;
-        mCanMove = false;
         mAnimator.SetTrigger("NearAttack");
         StartCoroutine(AttackOver());
     }
@@ -342,10 +479,155 @@ public class PlayerCtrl : MonoBehaviour
     void SetFarAttackAnim()
     {
         mIsAttack = true;
-        mCanMove = false;
         mAnimator.SetTrigger("FarAttack");
         StartCoroutine(AttackOver());
     }
 
+    void SetBlockAnim()
+    {
+        mAnimator.SetTrigger("Block");
+    }
+
+    void SetHurtAnim()
+    {
+        mAnimator.SetTrigger("Hurt");
+    }
+
+    void SetDieAnim()
+    {
+        mAnimator.SetTrigger("Die");
+    }
+
+    //非移动动画，需要禁用移动
+    void BanMoveAnim()
+    {
+        //mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
+        mCanMove = false;
+        if (mCurAnimState == PlayerAnimState.Move)
+        {
+            SetStopMoveAnim();
+        }
+    }
+
+    #endregion
+
+    #region 战斗相关
+    /// <summary>
+    /// 攻击的方向
+    /// </summary>
+    /// <returns></returns>
+    public int AttackDir()
+    {
+        return mLookAt;
+    }
+    /// <summary>
+    /// 受伤后无敌一段时间
+    /// </summary>
+    /// <param name="hurtDirection">受击方向 1 -> 右， -1 -> 左</param>
+    public void Hurt(int hurtDirection)
+    {
+        //无敌状态
+        if (mIsRush || mIsInvincible) return;
+        if(mHurtCoolTimer >= mHurtCoolTime)
+        {
+            mCanMove = false;
+            mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
+            SetHurtAnim();
+            //mRigidbody2D.AddForce(5 * mRigidbody2D.mass * hurtDirection * Vector2.right, ForceMode2D.Impulse);
+            mRigidbody2D.velocity = new Vector2(hurtDirection * 0.5f, mRigidbody2D.velocity.y);
+            var sequence = DOTween.Sequence();
+            sequence.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0), 0.1f));
+            sequence.Append(mSpriteRenderer.DOColor(new Color(1, 1, 1), 0.1f));
+            sequence.AppendCallback(() =>
+            {
+                mCanMove = true;
+            });
+            sequence.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0, 0.3f), 0.1f).SetLoops(6, LoopType.Yoyo));
+            
+            mCurHpCount--;
+            mHurtCoolTimer = 0;
+            FreshHpUI();
+            Die();
+        }
+    }
+    void UpdateHurt()
+    {
+        mHurtCoolTimer += Time.deltaTime;
+    }
+
+    void Die()
+    {
+        if (mCurHpCount <= 0)
+        {
+            mRigidbody2D.velocity = new Vector2(0, 0);
+            mIsDeath = true;
+            SetDieAnim();
+            BanMoveAnim();
+            var sequence = DOTween.Sequence();
+            sequence.AppendCallback(() =>
+            {
+                StartCoroutine(Rebirth());
+            });
+            sequence.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0, 0.3f), 0.15f).SetLoops(16, LoopType.Yoyo));
+            sequence.AppendCallback(() =>
+            {
+                mIsInvincible = false;
+            });
+        }
+    }
+
+    IEnumerator Rebirth()
+    {
+        yield return new WaitForSeconds(1f);
+        mIsDeath = false;
+        mIsInvincible = true;
+        mAnimator.Play("Entry");
+        mCurHpCount = mHpCount;
+        FreshHpUI();
+    }
+
+    /// <summary>
+    /// 设置武器判断的标签, 0 -> 冲刺， 1 -> 弹反
+    /// </summary>
+    /// <param name="tag"></param>
+    public void SetWeaponTag(int tag)
+    {
+        switch(tag)
+        {
+            case 0:
+                mWeapon.tag = "PlayerWeapon";
+                break;
+            case 1:
+                mWeapon.tag = "PlayerBlock";
+                break;
+        }
+    }
+    #endregion
+
+    #region UI相关
+    void InitUI()
+    {
+        for (int i = 0; i < mHpCount; i++)
+        {
+            HpCtrl hp = GameObject.Instantiate(mHp, mHpRoot).GetComponent<HpCtrl>();
+            hp.SetHp(true);
+            mHpCtrlList.Add(hp);
+        }
+    }
+
+    void FreshHpUI()
+    {
+        for (int i = 0; i < mHpCount; i++)
+        {
+            if (i < mCurHpCount)
+            {
+                mHpCtrlList[i].SetHp(true);
+            }
+            else
+            {
+                mHpCtrlList[i].SetHp(false);
+            }
+        }
+    }
     #endregion
 }
