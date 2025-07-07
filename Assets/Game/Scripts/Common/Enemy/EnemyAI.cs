@@ -7,24 +7,22 @@ public class EnemyAI : MonoBehaviour
         Idle,
         Move, 
         Attack,
-        Hurt,
         Die
     }
 
     public State mState;
     public EnemyCtrl mEnemyCtrl;
 
-
     // Start is called before the first frame update
-    void Start()
+    protected virtual void Start()
     {
         mState = State.Idle;
     }
 
     // Update is called once per frame
-    void Update()
+    protected virtual void Update()
     {
-        switch(mState)
+        switch (mState)
         {
             case State.Idle:
                 Idle();
@@ -34,9 +32,6 @@ public class EnemyAI : MonoBehaviour
                 break;
             case State.Attack:
                 Attack();
-                break;
-            case State.Hurt:
-                Hurt();
                 break;
             case State.Die:
                 Die();
@@ -56,11 +51,6 @@ public class EnemyAI : MonoBehaviour
     }
 
     public virtual void Attack()
-    {
-
-    }
-
-    public virtual void Hurt()
     {
 
     }

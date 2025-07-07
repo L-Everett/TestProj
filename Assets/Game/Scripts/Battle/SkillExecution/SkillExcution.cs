@@ -1,9 +1,5 @@
 using Engine;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Sirenix.OdinInspector;
 [Skill("默认空技能模板", 2, typeof(SkillExcution))]
 public class SkillConfig_Common : SkillConfigBase

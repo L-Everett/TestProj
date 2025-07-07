@@ -1,6 +1,8 @@
 ﻿using DG.Tweening;
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 /// <summary>
@@ -64,6 +66,10 @@ public class BossMirrorCtrl : EnemyCtrl
     /// 是否可移动
     /// </summary>
     private bool mCanMove;
+    /// <summary>
+    /// 移动目标点
+    /// </summary>
+    private float mTargetPos;
     //-------------------------------------------------------------------
 
     //--------------------------------跳跃--------------------------------
@@ -153,6 +159,7 @@ public class BossMirrorCtrl : EnemyCtrl
         //移动
         mLookAt = 1;
         mCanMove = true;
+        mTargetPos = transform.position.x;
 
         //跳跃
         mCurJumpCount = 0;
@@ -184,17 +191,18 @@ public class BossMirrorCtrl : EnemyCtrl
         InitUI();
     }
 
-    //private void FixedUpdate()
-    //{
-    //    if (!mIsDeath)
-    //    {
-    //        Move();
-    //    }
-    //}
+    private void FixedUpdate()
+    {
+        if (!mIsDeath)
+        {
+            Move();
+        }
+    }
 
     void Update()
     {
         UpdateTimer();
+        SetMoveAnim();
     }
 
     #region 控制相关
@@ -210,20 +218,38 @@ public class BossMirrorCtrl : EnemyCtrl
         UpdateHurt();
     }
 
+    public void SetIdle(bool canMove)
+    {
+        if (mCanMove == canMove) return;
+        SetCanMove(false);
+        SetAnim(PlayerAnimState.Idle);
+    }
+
     //移动
     void Move()
     {
-        if (!mCanMove) return;
-        float dir = Input.GetAxisRaw("Horizontal");
+        if (!mCanMove || mIsDeath || mTargetPos == 0) return;
+        int dir = mTargetPos - transform.position.x > 0 ? 1 : -1;
         mRigidbody2D.velocity = new Vector2(dir * mMoveSpeed, Mathf.Clamp(mRigidbody2D.velocity.y, -20, 20));
 
-        if (dir == 0 || mLookAt == dir) return;
-        mLookAt = -mLookAt;
-        transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x) * mLookAt, transform.localScale.y, transform.localScale.z);
+        SetDir(dir);
+    }
+    public void SetCanMove(bool canMove)
+    {
+        if(mCanMove ==  canMove) return;
+        mCanMove = canMove;
+    }
+    public void SetMoveTarget(float x)
+    {
+        if (mTargetPos == x) return;
+        mTargetPos = x;
+    }
+    public float GetMoveTarget()
+    {
+        return mTargetPos;
     }
 
-    //跳跃
-    void Jump()
+    public void Jump()
     {
         if (mJumpCoolTimer < mJumpMaxCoolTime) return;
         if (!mIsRush)
@@ -249,8 +275,7 @@ public class BossMirrorCtrl : EnemyCtrl
         mJumpCoolTimer += Time.deltaTime;
     }
 
-    // 鼠标左键冲刺
-    void Rush()
+    public void Rush()
     {
         if (mRushCoolTimer >= mRushMaxCoolTime && !mIsAttack && !mIsBlock)
         {
@@ -289,19 +314,24 @@ public class BossMirrorCtrl : EnemyCtrl
     /// 攻击 F-近战 Q-远程
     /// </summary>
     /// <param name="type">0 -> 近战, 1 -> 远程</param>
-    void Attack(int type)
+    public void Attack(int type, Action<int> callback = null)
     {
         if (type == 0 && mNearAttackCoolTimer >= mNearAttackMaxCoolTime && !mIsAttack && !mIsRush)
         {
-            SetNearAttackAnim();
-            mRigidbody2D.velocity = new Vector2(mLookAt * 1.5f, mRigidbody2D.velocity.y);
-            mNearAttackCoolTimer = -0.3f;
+            Time.timeScale = 0.1f;
+            Color initColor = mSpriteRenderer.color;
+            var seq = DOTween.Sequence();
+            seq.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0), 0.1f));
+            seq.Append(mSpriteRenderer.DOColor(initColor, 0.1f));
+            StartCoroutine(Near());
+            callback?.Invoke(0);
         }
         if (type == 1 && mFarAttackCoolTimer >= mFarAttackMaxCoolTime && !mIsAttack && !mIsRush)
         {
             SetFarAttackAnim();
             StartCoroutine(Shot());
             mFarAttackCoolTimer = -0.6f;
+            callback?.Invoke(0);
         }
         if (mIsAttack)
         {
@@ -316,11 +346,20 @@ public class BossMirrorCtrl : EnemyCtrl
     IEnumerator Shot()
     {
         yield return new WaitForSeconds(0.3f);
-        mRigidbody2D.velocity = new Vector2(mLookAt * -1.5f, mRigidbody2D.velocity.y);
+        mRigidbody2D.velocity = new Vector2(mLookAt * -3f, mRigidbody2D.velocity.y);
         Transform bullet = GameObject.Instantiate(mBullet, transform.parent).transform;
         bullet.position = transform.position + new Vector3(mLookAt, -0.8f, 0);
         bullet.localScale = new Vector3(mLookAt * bullet.localScale.x, bullet.localScale.y, bullet.localScale.z);
         bullet.GetComponent<Bullet>().Init(mLookAt, mMoveSpeed * 1.5f, 1); //玩家攻击-0，敌人攻击-1
+    }
+    IEnumerator Near()
+    {
+        yield return new WaitForSeconds(0.2f);
+        SetNearAttackAnim();
+        mRigidbody2D.velocity = new Vector2(mLookAt * 3f, mRigidbody2D.velocity.y);
+        mNearAttackCoolTimer = -0.3f;
+        yield return new WaitForSeconds(0.5f);
+        Time.timeScale = 1f;
     }
     IEnumerator AttackOver()
     {
@@ -329,7 +368,7 @@ public class BossMirrorCtrl : EnemyCtrl
         mCanMove = true;
     }
 
-    void Block()
+    public void Block()
     {
         if (mBlockCoolTimer >= mBlockCoolTime && !mIsAttack && !mIsRush)
         {
@@ -486,12 +525,14 @@ public class BossMirrorCtrl : EnemyCtrl
 
     #region 战斗相关
     /// <summary>
-    /// 攻击的方向
+    /// 设置的方向
     /// </summary>
     /// <returns></returns>
-    public int AttackDir()
+    public void SetDir(int dir)
     {
-        return mLookAt;
+        if (mLookAt == dir) return;
+        mLookAt = -mLookAt;
+        mSpriteRenderer.flipX = mLookAt < 0;
     }
     /// <summary>
     /// 受伤后无敌一段时间
@@ -503,11 +544,11 @@ public class BossMirrorCtrl : EnemyCtrl
         if (mIsRush || mIsInvincible) return;
         if (mHurtCoolTimer >= mHurtCoolTime)
         {
+            Color initColor = mSpriteRenderer.color;
             mCanMove = false;
             mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
             SetHurtAnim();
-            //mRigidbody2D.AddForce(5 * mRigidbody2D.mass * hurtDirection * Vector2.right, ForceMode2D.Impulse);
-            mRigidbody2D.velocity = new Vector2(hurtDirection * 0.5f, mRigidbody2D.velocity.y);
+            mRigidbody2D.velocity = new Vector2(hurtDirection * 3f, mRigidbody2D.velocity.y);
             var sequence = DOTween.Sequence();
             sequence.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0), 0.1f));
             sequence.Append(mSpriteRenderer.DOColor(new Color(1, 1, 1), 0.1f));
@@ -516,6 +557,10 @@ public class BossMirrorCtrl : EnemyCtrl
                 mCanMove = true;
             });
             sequence.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0, 0.3f), 0.1f).SetLoops(6, LoopType.Yoyo));
+            sequence.AppendCallback(() =>
+            {
+                mSpriteRenderer.color = initColor;
+            });
 
             mCurHpCount--;
             mHurtCoolTimer = 0;

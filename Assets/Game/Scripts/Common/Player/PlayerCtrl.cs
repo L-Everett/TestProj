@@ -46,9 +46,13 @@ public class PlayerCtrl : MonoBehaviour
     /// </summary>
     private bool mIsDeath;
     /// <summary>
-    /// 是否处于无敌
+    /// 是否处于受伤无敌
     /// </summary>
     private bool mIsInvincible;
+    /// <summary>
+    /// 是否处于弹反无敌
+    /// </summary>
+    public bool mIsBlockInvincible;
     //-------------------------------------------------------------------
 
     //--------------------------------移动--------------------------------
@@ -378,6 +382,13 @@ public class PlayerCtrl : MonoBehaviour
     {
         mBlockCoolTimer += Time.deltaTime;
     }
+    /// <summary>
+    /// 弹反成功重置冷却
+    /// </summary>
+    public void SetBlockCoolTime()
+    {
+        mBlockCoolTimer = mBlockCoolTime;
+    }
 
     #endregion
 
@@ -581,7 +592,8 @@ public class PlayerCtrl : MonoBehaviour
         yield return new WaitForSeconds(1f);
         mIsDeath = false;
         mIsInvincible = true;
-        mAnimator.Play("Entry");
+        mAnimator.Rebind();
+        mAnimator.Update(0);
         mCurHpCount = mHpCount;
         FreshHpUI();
     }

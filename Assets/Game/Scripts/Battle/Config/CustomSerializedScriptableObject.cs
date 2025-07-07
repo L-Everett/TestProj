@@ -1,10 +1,7 @@
 using Sirenix.OdinInspector;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using UnityEngine;
 
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 sealed class ConfigTypeAttribute : Attribute
