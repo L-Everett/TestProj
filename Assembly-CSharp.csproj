@@ -64,6 +64,7 @@
     <Compile Include="Assets\Game\Scripts\Common\Enemy\EnemyWeapon.cs" />
     <Compile Include="Assets\Game\Scripts\Battle\Excution\BaseExecution.cs" />
     <Compile Include="Assets\Game\Scripts\Battle\SkillExecution\SkillExcution.cs" />
+    <Compile Include="Assets\Game\Scripts\Battle\SkillExecution\FireballExecution.cs" />
     <Compile Include="Assets\Game\Scripts\Common\Enemy\Boss\BossMirrorAI.cs" />
     <Compile Include="Assets\Game\Scripts\Battle\Bullet\Bullet.cs" />
     <Compile Include="Assets\Game\UI\Player\HpCtrl.cs" />
@@ -83,7 +84,6 @@
     <Compile Include="Assets\Game\Scripts\Common\Enemy\EnemyAI.cs" />
     <Compile Include="Assets\Game\Scripts\Common\Utils\GameDefine.cs" />
     <Compile Include="Assets\Game\Scripts\Common\Enemy\EnemyCtrl.cs" />
-    <Compile Include="Assets\Game\Scripts\Battle\SkillExecution\FireballExecution.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Plugin\Sirenix\Assemblies\NoEmitAndNoEditor\Sirenix.Serialization.dll" />

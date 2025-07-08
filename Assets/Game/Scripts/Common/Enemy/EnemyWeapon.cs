@@ -3,15 +3,23 @@
 public class EnemyWeapon : MonoBehaviour
 {
     public EnemyCtrl mEnemyCtrl;
+
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        if (collision.CompareTag("Player") && CompareTag("PlayerWeapon"))
+        if (collision.CompareTag("PlayerBlock") && CompareTag("EnemyWeapon"))
         {
-            collision.GetComponent<PlayerCtrl>().Hurt(mEnemyCtrl.mLookAt);
+            PlayerCtrl player = collision.GetComponent<PlayerWeapon>().mPlayerCtrl;
+            gameObject.tag = "Untagged";
+            player.SetBlockCoolTime();
+            player.ShowBlockEffect();
+            player.mIsBlockInvincible = true;
+            mEnemyCtrl.ByBlock(player.mLookAt);
         }
-        else if (collision.CompareTag("PlayerBlock"))
+        else if (collision.CompareTag("Player") && CompareTag("EnemyWeapon"))
         {
-            Debug.Log("弹反成功");
+            if (collision.GetComponent<PlayerCtrl>().mIsBlock) return;
+            gameObject.tag = "Untagged";
+            collision.GetComponent<PlayerCtrl>().Hurt(mEnemyCtrl.mLookAt);
         }
     }
 }

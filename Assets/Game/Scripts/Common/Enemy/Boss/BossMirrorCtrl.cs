@@ -145,6 +145,10 @@ public class BossMirrorCtrl : EnemyCtrl
     /// 角色初始重力规模
     /// </summary>
     private float mInitGravityScale;
+    /// <summary>
+    /// 初始颜色
+    /// </summary>
+    private Color mInitColor;
     //-------------------------------------------------------------------
     #endregion
 
@@ -182,6 +186,7 @@ public class BossMirrorCtrl : EnemyCtrl
         mInitGravityScale = mRigidbody2D.gravityScale;
         mIsOnGround = true;
         mCurAnimState = PlayerAnimState.Idle;
+        mInitColor = mSpriteRenderer.color;
     }
     #endregion
 
@@ -228,10 +233,12 @@ public class BossMirrorCtrl : EnemyCtrl
     //移动
     void Move()
     {
-        if (!mCanMove || mIsDeath || mTargetPos == 0) return;
+        if (!mCanMove) return;
+        if ((new Vector2(transform.position.x - mTargetPos, 0)).sqrMagnitude < 0.3f * 0.3f) return;
+        if (mIsRush) return;
+
         int dir = mTargetPos - transform.position.x > 0 ? 1 : -1;
         mRigidbody2D.velocity = new Vector2(dir * mMoveSpeed, Mathf.Clamp(mRigidbody2D.velocity.y, -20, 20));
-
         SetDir(dir);
     }
     public void SetCanMove(bool canMove)
@@ -258,11 +265,13 @@ public class BossMirrorCtrl : EnemyCtrl
             switch (mCurJumpCount)
             {
                 case 0:
-                    mRigidbody2D.AddForce(Vector2.up * mJumpForce, ForceMode2D.Impulse);
+                    //mRigidbody2D.AddForce(Vector2.up * mJumpForce, ForceMode2D.Impulse);
+                    mRigidbody2D.velocity = new Vector2(mRigidbody2D.velocity.x, 20);
                     break;
                 case 1:
                     mRigidbody2D.velocity = new Vector2(mRigidbody2D.velocity.x, 0);
-                    mRigidbody2D.AddForce(Vector2.up * mJumpForce, ForceMode2D.Impulse);
+                    //mRigidbody2D.AddForce(Vector2.up * mJumpForce, ForceMode2D.Impulse);
+                    mRigidbody2D.velocity = new Vector2(mRigidbody2D.velocity.x, 20);
                     break;
             }
             mCurJumpCount++;
@@ -275,19 +284,21 @@ public class BossMirrorCtrl : EnemyCtrl
         mJumpCoolTimer += Time.deltaTime;
     }
 
-    public void Rush()
+    public void Rush(Action<int> callback = null)
     {
         if (mRushCoolTimer >= mRushMaxCoolTime && !mIsAttack && !mIsBlock)
         {
             if (mIsOnGround || !mHasRushOnSky)
             {
                 mRigidbody2D.velocity = new Vector2(0, 0);
-                mRigidbody2D.AddForce(mLookAt * mRushForce * Vector2.right, ForceMode2D.Impulse);
+                //mRigidbody2D.AddForce(mLookAt * mRushForce * Vector2.right, ForceMode2D.Impulse);
+                mRigidbody2D.velocity = new Vector2(mLookAt * 16, mRigidbody2D.velocity.y);
                 mRushCoolTimer = -mRushKeepTime;
                 mIsRush = true;
                 mCanMove = false;
                 mHasRushOnSky = !mIsOnGround;
                 SetRushAnim();
+                callback?.Invoke(0);
             }
         }
 
@@ -318,11 +329,10 @@ public class BossMirrorCtrl : EnemyCtrl
     {
         if (type == 0 && mNearAttackCoolTimer >= mNearAttackMaxCoolTime && !mIsAttack && !mIsRush)
         {
-            Time.timeScale = 0.1f;
-            Color initColor = mSpriteRenderer.color;
             var seq = DOTween.Sequence();
             seq.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0), 0.1f));
-            seq.Append(mSpriteRenderer.DOColor(initColor, 0.1f));
+            seq.Append(mSpriteRenderer.DOColor(mInitColor, 0.1f));
+            mNearAttackCoolTimer = -0.7f;
             StartCoroutine(Near());
             callback?.Invoke(0);
         }
@@ -356,10 +366,8 @@ public class BossMirrorCtrl : EnemyCtrl
     {
         yield return new WaitForSeconds(0.2f);
         SetNearAttackAnim();
-        mRigidbody2D.velocity = new Vector2(mLookAt * 3f, mRigidbody2D.velocity.y);
-        mNearAttackCoolTimer = -0.3f;
-        yield return new WaitForSeconds(0.5f);
-        Time.timeScale = 1f;
+        mRigidbody2D.velocity = new Vector2(mLookAt * 5f, mRigidbody2D.velocity.y);
+        yield return new WaitForSeconds(0.3f);
     }
     IEnumerator AttackOver()
     {
@@ -437,7 +445,7 @@ public class BossMirrorCtrl : EnemyCtrl
         if (mRigidbody2D.velocity.x != 0 && mCanMove)
         {
             if (mCurAnimState == PlayerAnimState.Jump1 || mCurAnimState == PlayerAnimState.Jump2) return;
-            mAnimator.SetFloat("MoveSpeed", Mathf.Abs(mRigidbody2D.velocity.x) * mMoveSpeed / 12);
+            if(mRigidbody2D.velocity.x > 3) mAnimator.SetFloat("MoveSpeed", Mathf.Abs(mRigidbody2D.velocity.x) * mMoveSpeed / 12);
             if (mCurAnimState != PlayerAnimState.Move && mIsOnGround)
             {
                 SetAnim(PlayerAnimState.Move);
@@ -531,8 +539,9 @@ public class BossMirrorCtrl : EnemyCtrl
     public void SetDir(int dir)
     {
         if (mLookAt == dir) return;
+        mRigidbody2D.velocity = Vector3.zero;
         mLookAt = -mLookAt;
-        mSpriteRenderer.flipX = mLookAt < 0;
+        transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x) * mLookAt, transform.localScale.y, transform.localScale.z);
     }
     /// <summary>
     /// 受伤后无敌一段时间
@@ -544,7 +553,6 @@ public class BossMirrorCtrl : EnemyCtrl
         if (mIsRush || mIsInvincible) return;
         if (mHurtCoolTimer >= mHurtCoolTime)
         {
-            Color initColor = mSpriteRenderer.color;
             mCanMove = false;
             mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
             SetHurtAnim();
@@ -559,7 +567,7 @@ public class BossMirrorCtrl : EnemyCtrl
             sequence.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0, 0.3f), 0.1f).SetLoops(6, LoopType.Yoyo));
             sequence.AppendCallback(() =>
             {
-                mSpriteRenderer.color = initColor;
+                mSpriteRenderer.color = mInitColor;
             });
 
             mCurHpCount--;
@@ -600,12 +608,22 @@ public class BossMirrorCtrl : EnemyCtrl
         switch (tag)
         {
             case 0:
-                mWeapon.tag = "PlayerWeapon";
+                mWeapon.tag = "EnemyWeapon";
                 break;
             case 1:
-                mWeapon.tag = "PlayerBlock";
+                mWeapon.tag = "EnemyBlock";
                 break;
         }
+    }
+
+    /// <summary>
+    /// 被弹反
+    /// </summary>
+    /// <param name="dir"></param>
+    public override void ByBlock(int dir)
+    {
+        mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
+        mRigidbody2D.velocity = new Vector2(dir * 3f, mRigidbody2D.velocity.y);
     }
     #endregion
 

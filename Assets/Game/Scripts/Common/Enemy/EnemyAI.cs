@@ -7,6 +7,7 @@ public class EnemyAI : MonoBehaviour
         Idle,
         Move, 
         Attack,
+        Defence,
         Die
     }
 
@@ -33,6 +34,9 @@ public class EnemyAI : MonoBehaviour
             case State.Attack:
                 Attack();
                 break;
+            case State.Defence:
+                Attack();
+                break;
             case State.Die:
                 Die();
                 break;
@@ -51,6 +55,11 @@ public class EnemyAI : MonoBehaviour
     }
 
     public virtual void Attack()
+    {
+
+    }
+
+    public virtual void Defence()
     {
 
     }

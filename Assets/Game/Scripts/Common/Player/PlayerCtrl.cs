@@ -11,6 +11,7 @@ public class PlayerCtrl : MonoBehaviour
     public Animator mAnimator;
     public SpriteRenderer mSpriteRenderer;
     public GameObject mWeapon;
+    public ParticleSystem mBlockEffect;
 
     [Header("UI")]
     public Transform mHpRoot;
@@ -123,7 +124,7 @@ public class PlayerCtrl : MonoBehaviour
     /// <summary>
     /// 正在弹反
     /// </summary>
-    private bool mIsBlock;
+    public bool mIsBlock;
     //-------------------------------------------------------------------
 
     //--------------------------------其他--------------------------------
@@ -209,11 +210,11 @@ public class PlayerCtrl : MonoBehaviour
         {
             Jump();
         }
-        else if (Input.GetMouseButtonDown(0))
+        else if (Input.GetKeyDown(KeyCode.F))
         {
             Rush();
         }
-        else if (Input.GetKeyDown(KeyCode.F))
+        else if (Input.GetMouseButtonDown(0))
         {
             Attack(0);
         }
@@ -280,7 +281,7 @@ public class PlayerCtrl : MonoBehaviour
         mJumpCoolTimer += Time.deltaTime;
     }
 
-    // 鼠标左键冲刺
+    // 冲刺
     void Rush()
     {
         if (mRushCoolTimer >= mRushMaxCoolTime && !mIsAttack && !mIsBlock)
@@ -317,7 +318,7 @@ public class PlayerCtrl : MonoBehaviour
     }
 
     /// <summary>
-    /// 攻击 F-近战 Q-远程
+    /// 攻击 鼠标左键-近战 Q-远程
     /// </summary>
     /// <param name="type">0 -> 近战, 1 -> 远程</param>
     void Attack(int type)
@@ -330,6 +331,7 @@ public class PlayerCtrl : MonoBehaviour
         }
         if (type == 1 && mFarAttackCoolTimer >= mFarAttackMaxCoolTime && !mIsAttack && !mIsRush)
         {
+            mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
             SetFarAttackAnim();
             StartCoroutine(Shot());
             mFarAttackCoolTimer = -0.6f;
@@ -368,15 +370,16 @@ public class PlayerCtrl : MonoBehaviour
             mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
             BanMoveAnim();
             SetBlockAnim();
-            mBlockCoolTimer = -0.2f;
+            mBlockCoolTimer = -0.4f;
             StartCoroutine(BlockOver());
         }
     }
     IEnumerator BlockOver()
     {
-        yield return new WaitForSeconds(0.2f);
+        yield return new WaitForSeconds(0.4f);
         mCanMove = true;
         mIsBlock = false;
+        mIsBlockInvincible = false;
     }
     void UpdateBlock()
     {
@@ -538,13 +541,12 @@ public class PlayerCtrl : MonoBehaviour
     public void Hurt(int hurtDirection)
     {
         //无敌状态
-        if (mIsRush || mIsInvincible) return;
+        if (mIsRush || mIsInvincible || mIsBlockInvincible) return;
         if(mHurtCoolTimer >= mHurtCoolTime)
         {
             mCanMove = false;
             mRigidbody2D.velocity = new Vector2(0, mRigidbody2D.velocity.y);
             SetHurtAnim();
-            //mRigidbody2D.AddForce(5 * mRigidbody2D.mass * hurtDirection * Vector2.right, ForceMode2D.Impulse);
             mRigidbody2D.velocity = new Vector2(hurtDirection * 0.5f, mRigidbody2D.velocity.y);
             var sequence = DOTween.Sequence();
             sequence.Append(mSpriteRenderer.DOColor(new Color(1, 0, 0), 0.1f));
@@ -613,6 +615,15 @@ public class PlayerCtrl : MonoBehaviour
                 mWeapon.tag = "PlayerBlock";
                 break;
         }
+    }
+
+    public void ShowBlockEffect()
+    {
+        mBlockEffect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        mBlockEffect.transform.position = new Vector3(transform.position.x + mLookAt,
+            transform.position.y - 0.8f,
+            mBlockEffect.transform.position.z);
+        mBlockEffect.Play();
     }
     #endregion
 

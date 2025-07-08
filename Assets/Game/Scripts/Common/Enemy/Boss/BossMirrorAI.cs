@@ -10,15 +10,18 @@ public class BossMirrorAI : EnemyAI
 
     [Label("发呆时间")] public float mIdleTime;
     [Label("单轮最多攻击次数")] public int mMaxAttackCount;
+    [Label("指令间冷却时间")] public float mCommondCoolTime;
 
     private float mIdleCoolTimer;  //发呆冷却计时器
     private int mAttackCount;  //攻击次数计数器
+    private float mCommondCoolTimer;
 
     void InitData()
     {
         mCtrl = mEnemyCtrl as BossMirrorCtrl;
         mPlayer = GameObject.Find("PlayerRoot").transform.GetChild(0);
         mIdleCoolTimer = mIdleTime;
+        mCommondCoolTimer = mCommondCoolTime;
     }
 
     protected override void Start()
@@ -48,7 +51,8 @@ public class BossMirrorAI : EnemyAI
 
     void UpdateCoolTimer()
     {
-        
+        mCommondCoolTimer += Time.deltaTime;
+        mIdleCoolTimer += Time.deltaTime;
     }
 
     public override void Idle()
@@ -75,8 +79,15 @@ public class BossMirrorAI : EnemyAI
     {
         if(CheckPlayer())
         {
-            mCtrl.SetMoveTarget(mPlayer.position.x);
-            mState = State.Attack;
+            if(mCommondCoolTimer >= mCommondCoolTime)
+            {
+                float target = mPlayer.position.x - transform.position.x;
+                target = target > 0 ? mPlayer.position.x - 2.5f : mPlayer.position.x + 2.5f;
+                mCtrl.SetMoveTarget(target);
+                mCtrl.SetCanMove(true);
+                mState = State.Attack;
+                mCommondCoolTimer = 0;
+            }
         }
         // 巡逻
         else
@@ -84,10 +95,12 @@ public class BossMirrorAI : EnemyAI
             if (transform.position.x <= mLeftLimit.position.x)
             {
                 mCtrl.SetMoveTarget(mRightLimit.position.x);
+                mCtrl.SetDir(1);
             }
             else if (transform.position.x >= mRightLimit.position.x)
             {
                 mCtrl.SetMoveTarget(mLeftLimit.position.x);
+                mCtrl.SetDir(-1);
             }
             else
             {
@@ -107,36 +120,54 @@ public class BossMirrorAI : EnemyAI
     {
         if(CheckPlayer())
         {
-            int backCode = -1;
-            mCtrl.SetDir(mPlayer.position.x - transform.position.x > 0 ? 1 : -1);
-            if (Vector2.Distance(transform.position, mPlayer.position) > 3f)
+            if (mCommondCoolTimer > mCommondCoolTime)
             {
-                mCtrl.Attack(1, (x) =>
+                mCtrl.SetCanMove(false);
+                int backCode = -1;
+                mCtrl.SetDir(mPlayer.position.x - transform.position.x > 0 ? 1 : -1);
+                float dis = Vector2.Distance(transform.position, mPlayer.position);
+                if (dis > 5f)
                 {
-                    backCode = x;
-                });
-            }
-            else
-            {
-                mCtrl.Attack(0, (x) =>
-                {
-                    backCode = x;
-                });
-            }
-            if (backCode == 0) mAttackCount++;
+                    mCtrl.Attack(1, (x) =>
+                    {
+                        backCode = x;
+                    });
 
-            if (mAttackCount >= mMaxAttackCount)
-            {
-                mAttackCount = 0;
-                mState = State.Idle;
-                return;
+                    if (backCode == -1) mCtrl.Rush((x) => {
+                        backCode = x;
+                    });
+                }
+                else
+                {
+                    mCtrl.Attack(0, (x) =>
+                    {
+                        backCode = x;
+                    });
+                }
+                if (backCode == 0)
+                {
+                    mAttackCount++;
+                    mCommondCoolTimer = 0;
+                }
+
+                if (mAttackCount >= mMaxAttackCount)
+                {
+                    mAttackCount = 0;
+                    mState = State.Idle;
+                    return;
+                }
+                mState = State.Move;
             }
-            mState = State.Move;
         }
         else
         {
             mState = State.Move;
         }
+    }
+
+    public override void Defence()
+    {
+        mState = State.Idle;
     }
 
     public override void Die()

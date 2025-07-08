@@ -96,6 +96,10 @@ public class Bullet : MonoBehaviour
         {
             if (mReleaser == 0) return;
         }
+        else if (collision.CompareTag("EnemyWeapon"))
+        {
+            if (mReleaser == 1) return;
+        }
 
         //被弹反的附带一次穿透效果
         if (mIsBlock)

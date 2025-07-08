@@ -7,4 +7,9 @@ public class EnemyCtrl : MonoBehaviour
     {
 
     }
+
+    public virtual void ByBlock(int dir)
+    {
+
+    }
 }
